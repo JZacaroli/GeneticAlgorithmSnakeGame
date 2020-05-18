@@ -3,13 +3,10 @@ import g4p_controls.*;
 /*
  * CONFIGURABLE PROPERTIES
  */
-int N = 2000; //population size
-int topPercent = 10; //what percentage get to reproduce. Also 50% of the percentage that gets lost each generation.
-float mutationChance = 0.1;
-//Snakes get points for lasting longer and getting fruit, more heavily weighted towards getting fruit.
-float pointsPerTimeStep = 0.1;
-float pointsForFinishing = 150;
-float pointsForFruit = 150;
+int N = 10000; //population size
+float mutationChance = 0.2;
+float pointsForFinishing = 5; //Snakes get points for reaching the end of the allowed time.
+
 //The NN library writes files to a weird place so I don't want this to automatically save.
 boolean writeToFileAutomatically = false;
 
@@ -17,14 +14,11 @@ boolean writeToFileAutomatically = false;
  * NON-CONFIGURABLE PROPERTIES
  */
 int timeDelay = 0; // This one is technically configurable but via a user pressing a button on the screen
-int DIRECTION_UP = 0;
-int DIRECTION_RIGHT = 1; 
-int DIRECTION_DOWN = 2; 
-int DIRECTION_LEFT = 3; 
+
 int NAlive = N;
 int bestGeneration = 0;
-double bestGenerationScore = 0;
-double currentGenerationScore;
+float bestGenerationScore = 0;
+float currentGenerationScore;
 ArrayList<Snake> Snakes = new ArrayList<Snake>();
 ArrayList<Snake> prevGeneration = new ArrayList<Snake>();
 int currentGeneration = 0;
@@ -62,18 +56,23 @@ void draw() {
 
   //Make the snakes think and decide where to go
   for (int i=0; i<N; i++) {
+    
     Snake snake = Snakes.get(i);
+    
     if (!snake.isDead) {
+      
       snake.think();
-      //snake has chosen to go left/right/straight on.
+      
+      //snake has now chosen to go left/right/straight on.
       boolean collisionDetected = snake.willCollideWithSomething();
+      
       if (collisionDetected) {
         snake.isDead = true;
         NAlive--;
       } else {
         //Update the snake's position and give it some points for surviving another time step.
         snake.updatePositions();
-        snake.points = snake.points + pointsPerTimeStep;
+        //snake.points = snake.points + pointsPerTimeStep;
       }
     }
   }
@@ -103,10 +102,13 @@ void scoreGenerationAndRestartGame() {
   }
   //work out what the generation scored.
   calculateGenerationScore();
+  
+  //Pass this generation's stats into the stats window.
   StatsWindowData d = (StatsWindowData)statsWindow.data;
   d.addScore(currentGenerationScore, NAlive, piecesOfFruitEaten);
+  
   //create new snakes implementing all the genetics etc.
-  createNewSnakes();
+  createNewSnakes_Mk2();
   //reset some game state variables.
   resetStartOfGameState();
 }
@@ -120,20 +122,17 @@ void resetStartOfGameState() {
   NAlive = N;
   time = 0;
   
-  //Let the maximum time the snakes can run for increase over time.
-  //Hopefully they'll first learn to grab the fruit, then eventually
-  //start surviving slightly better.
-  if (currentGeneration > 2000) {
-    maxTime = 800; }
-  /*} else if (currentGeneration > 1000) {
-    maxTime = 500;
+  if (currentGeneration > 1000) {
+    mutationChance = 0.001;
   } else if (currentGeneration > 500) {
-    maxTime = 400;
+    mutationChance = 0.01;
+  } else if (currentGeneration > 300) {
+    mutationChance = 0.025;
   } else if (currentGeneration > 200) {
-    maxTime = 300;
-  } else if (currentGeneration > 50) {
-    maxTime = 200;
-  }*/
+    mutationChance = 0.05;
+  } else if (currentGeneration > 100) {
+    mutationChance = 0.1;
+  }
 }
 
 
@@ -157,106 +156,70 @@ boolean allSnakesAreDead() {
   return true;
 }
 
-/*
- * Create a new generation of snakes.
- * A - Find the best scoring X% of snakes.
- * B - Remove the worst 2X% of snakes.
- * C - Allow the best scoring snakes to have 2 offspring, breeding with another of the top snakes.
- * D - Give the new snakes a chance to mutate.
- * E - Add the best scoring X% and their offspring to the new generation.
- * F - Add all the snakes that did ok (not in the top X% or the bottom 2X%) to the new generation.
+/**
+ * createNewSnakes_Mk2. Better version. Calculate a random number between 0 and the sum of all snakes' points.
+ * Then go through the population adding their score and select the snake if the cumulative
+ * score is above the random number. This means snakes with a higher score are more likely
+ * to be chosen.
  */
-void createNewSnakes() {
-  //copy the snakes into prevGeneration
+void createNewSnakes_Mk2() {
+  //Copy the snakes into prevGeneration so if I want to save it I can.
   prevGeneration = null;
   prevGeneration = new ArrayList<Snake>();
   for (int i=0; i<N; i++) {
-    prevGeneration.add(Snakes.get(i).copySnake());
+    prevGeneration.add(Snakes.get(i));
   }
-
-  //A - Find the best scoring X% of snakes.
-  //B - Remove the worst 2X% of snakes.
+  
   ArrayList<Snake> newGeneration = new ArrayList<Snake>();
-  int NBest = topPercent*N/100;
-  ArrayList<Snake> bestSnakes = findBestXAndRemoveWorst2XOfSnakes(NBest);
-
-  //C - Allow the best scoring snakes to have 2 offspring, breeding with another of the top snakes.
-  for (int i=0; i<NBest; i++) {
-    Snake snake = bestSnakes.get(i).copySnake();
-    Snake otherSnake = bestSnakes.get(floor(random(1, NBest))).copySnake();
-    NeuralNetwork childBrain1 = snake.brain.merge(otherSnake.brain);
-    NeuralNetwork childBrain2 = snake.brain.merge(otherSnake.brain);
-    //D - Give the new snakes a chance to mutate.
-    Snake childSnake1 = createNewGenSnake(childBrain1);
-    Snake childSnake2 = createNewGenSnake(childBrain2);
-    Snake snakeCopy = snake.copySnake();
-    snakeCopy.positions = createInitialPositionsArray();
-    //E - Add the best scoring X% and their offspring to the new generation.
-    newGeneration.add(snakeCopy);
-    newGeneration.add(childSnake1);
-    newGeneration.add(childSnake2);
-  }
-  //F - Add all the snakes that did ok (not in the top X% or the bottom 2X%) to the new generation.
-  for (int i=0; i<Snakes.size(); i++) {
-    Snake s = Snakes.get(i);
-    Snake sCopy = s.copySnake();
-    sCopy.positions = createInitialPositionsArray();
-    newGeneration.add(sCopy);
+  
+  newGeneration = addBestSnake(newGeneration);
+  
+  for (int i=0; i<N-1; i++) {
+    //Select two parents
+    Snake parent1 = selectParentSnake();
+    Snake parent2 = selectParentSnake();
+    
+    //Create a child snake
+    NeuralNetwork childBrain = parent1.brain.merge(parent2.brain);
+    Snake childSnake = createNewGenSnake(childBrain);
+    
+    //Add the child to the next generation
+    newGeneration.add(childSnake);
   }
   Snakes = newGeneration;
   currentGeneration++;
-
-  if (currentGeneration % 5 == 0) {
-    System.gc();
-  }
-  
-  bestSnakes = null;
-  newGeneration = null;
 }
 
-ArrayList<Snake> findBestXAndRemoveWorst2XOfSnakes(int NBest) {
-  ArrayList<Snake> bestSnakes = new ArrayList<Snake>();
-  int NWorst = 2*NBest;
-  for (int i=0; i<NBest; i++) { //get twice the amount of worst snakes as best snakes. Remove the worst snakes
-    float highestScore = 0;
-    Snake bestSnake = new Snake(createInitialPositionsArray());
-    for (int j=0; j<Snakes.size(); j++)
-    {
-      Snake s = Snakes.get(j);
-      float score = s.points;
-      if (i < NBest && score > highestScore)
-      {
-        //we've found the best snake so far
-        highestScore = s.points;
-        bestSnake = s;
-      }
+Snake selectParentSnake() {
+  float randomNumber = random(currentGenerationScore);
+  float cumulativeScore = 0.01; //smallest possible score so that we always return a snake.
+  for (int i=0; i<N; i++) {
+    Snake s = Snakes.get(i); 
+    cumulativeScore += s.points;
+    if (cumulativeScore > randomNumber) {
+      return s;
     }
-    Snakes.remove(bestSnake);
-    bestSnakes.add(bestSnake);
   }
+  
+  return null;
+}
 
-  for (int i=0; i<NWorst; i++) {
-    float lowestScore = 99999999;
-    Snake worstSnake = new Snake(createInitialPositionsArray());
-    for (int j=0; j<Snakes.size(); j++)
-    {
-      Snake s = Snakes.get(j);
-      float score = s.points;
-    
-      if (score < lowestScore) {
-        //we've found the worst snake so far
-        lowestScore = s.points;
-        worstSnake = s;
-      }
+ArrayList<Snake> addBestSnake(ArrayList<Snake> newGen) {
+  Snake bestSnake = null;
+  float bestScore = 0;
+  for (int i=0; i<N; i++) {
+    Snake s = Snakes.get(i);
+    if (s.points > bestScore) {
+      bestSnake = s;
     }
-    Snakes.remove(worstSnake);
   }
-  return bestSnakes;
+  newGen.add(bestSnake.copySnake());
+  return newGen;
 }
 
 Snake createNewGenSnake(NeuralNetwork brain) {
   ArrayList<int[]> positions = createInitialPositionsArray();
-  return new Snake(positions, brain);
+  return new Snake(positions, brain, mutationChance);
 }
 
 ArrayList<int[]> createInitialPositionsArray() {
@@ -287,12 +250,42 @@ void mousePressed() {
   }
 }
 
+void keyPressed() {
+  switch (key) {
+    case '/':
+      mutationChance = 0.5;
+      break;
+    case '.':
+      mutationChance = 0.3;
+      break;
+    case ',':
+      mutationChance = 0.2;
+      break;
+    case 'm':
+      mutationChance = 0.1;
+      break;
+    case 'n':
+      mutationChance = 0.075;
+      break;
+    case 'b':
+      mutationChance = 0.05;
+      break;
+    case 'v':
+      mutationChance = 0.025;
+      break;
+    case 'c':
+      mutationChance = 0.01;
+      break;
+  }
+  println("Mutation Chance selected: " + mutationChance);
+}
+
 /**
  * Get the best scoring snake for either this or the last generation. Write this to file.
  */
 void findBestSnakeAndWriteToFile(boolean currentGeneration) {
   float bestScore = 0;
-  Snake bestSnake = new Snake(createInitialPositionsArray());
+  Snake bestSnake = null;
   Snake s;
   for (int i=0; i<N; i++) {
     if (currentGeneration) {
@@ -314,7 +307,7 @@ void findBestSnakeAndWriteToFile(boolean currentGeneration) {
  * Sum the scores of all the snakes.
  */
 void calculateGenerationScore() {
-  currentGenerationScore = 0;
+  currentGenerationScore = 0; //smallest possible increment
   for (int i=0; i<N; i++) {
     currentGenerationScore += Snakes.get(i).points;
   }
@@ -331,7 +324,7 @@ void calculateGenerationScore() {
 }
 
 /**
- * Snakes get points if they are alive at the end of the game.
+ * Snakes can get points if they are alive at the end of the game.
  */
 void increaseAllAliveSnakesScores() {
   for (int i=0; i<Snakes.size(); i++)
@@ -375,12 +368,12 @@ void drawSpeedButtons() {
 }
 
 /**
- * Draw at most 50 snakes. You can get a good idea of what the population
- * as a whole is doing, and it runs about as fast as not drawing any.
+ * Draw at most 10 snakes. You can get some idea of what the population
+ * is doing, and it runs about as fast as not drawing any.
  */
 void drawSomeOfTheSnakes() {
-  //if less that 50 are alive, just draw all the alive ones.
-  if (NAlive < 50) { 
+  //if less that 10 are alive, just draw all the alive ones.
+  if (NAlive < 10) { 
     for (int i=0; i<N; i++) {
       Snake snake = Snakes.get(i);
       if (!snake.isDead)
@@ -390,10 +383,10 @@ void drawSomeOfTheSnakes() {
       }
     }
   } else {
-    //draw only 50 snakes
+    //draw only 10 snakes
     int drawn = 0;
     int i = 0;
-    while (drawn < 50) {
+    while (drawn < 10) {
       Snake snake = Snakes.get((i));
       if (!snake.isDead)
       {

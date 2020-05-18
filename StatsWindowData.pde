@@ -2,9 +2,9 @@ import java.util.*;
 import java.lang.Double;
 
 public class StatsWindowData extends GWinData {
-    // The variables can be anything you like.
-    double maxScore = 0;
-    public List<Double> scores = new ArrayList<Double>();
+
+    float maxScore = 0;
+    public List<Float> scores = new ArrayList<Float>();
     int maxSurvivors = 0;
     public List<Integer> survivors = new ArrayList<Integer>();
     int maxFruitEaten = 0;
@@ -12,7 +12,7 @@ public class StatsWindowData extends GWinData {
     public int numberOfGens = 0;
     
     
-    public void addScore(double score, int numOfSurvivors, int numOfFruitEaten) {
+    public void addScore(float score, int numOfSurvivors, int numOfFruitEaten) {
       numberOfGens++;
       if (score > maxScore) {
         maxScore = score;
@@ -32,13 +32,13 @@ public class StatsWindowData extends GWinData {
 public void windowDraw(PApplet app, GWinData data) {
   StatsWindowData statsData = (StatsWindowData)data;
   //Get out all the data.
-  List<Double> scores_ = statsData.scores;
+  List<Float> scores_ = statsData.scores;
   List<Integer> fruitEaten = statsData.fruitEaten;
   List<Integer> survivors = statsData.survivors;
   float maxSurvivors = (float)statsData.maxSurvivors;
   float maxFruitEaten = (float)statsData.maxFruitEaten;
   int numberOfGens = statsData.numberOfGens;
-  double maxScore = statsData.maxScore;
+  float maxScore = statsData.maxScore;
   
   app.background(255);
   
@@ -55,11 +55,11 @@ public void windowDraw(PApplet app, GWinData data) {
   app.strokeWeight(1);
   //For each pair of data points, draw a line between them!
   for (int i=0; i<numberOfGens-1; i++) {
-    float score0 = (float) (scores_.get(i)/maxScore);
-    float score1 = (float) (scores_.get(i+1)/maxScore);
-    float yPos0 = app.height - (score0*((float)app.height));
+    float score0 = (scores_.get(i)/maxScore);
+    float score1 = (scores_.get(i+1)/maxScore);
+    float yPos0 = app.height - (score0*(app.height));
     float xPos0 = i * app.width/numberOfGens;
-    float yPos1 = app.height - (score1*((float)app.height));
+    float yPos1 = app.height - (score1*(app.height));
     float xPos1 = (i+1) * app.width/numberOfGens;
     app.stroke(30);
     app.line(xPos0, yPos0, xPos1, yPos1);

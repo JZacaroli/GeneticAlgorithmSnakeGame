@@ -1,3 +1,10 @@
+int DIRECTION_UP = 0;
+int DIRECTION_RIGHT = 1; 
+int DIRECTION_DOWN = 2; 
+int DIRECTION_LEFT = 3;
+float pointsPerTimeStep = 0.01;
+float pointsForFruit = 25;
+
 class Snake {
   ArrayList<int[]> positions = new ArrayList<int[]>();
   int direction = floor(random(3)); //start snakes going right/up/down randomly.
@@ -9,16 +16,19 @@ class Snake {
   //This constructor is used when initialising the first generation of snakes
   Snake(ArrayList<int[]> _positions) {
     positions = _positions;
-    brain = new NeuralNetwork(9, 9, 3);
+    brain = new NeuralNetwork(9, 6, 3); //brain = new NeuralNetwork(400, 20, 3);
+    brain.setActivationFunction(ActivationFunction.TANH);
     createFruit();
   }
   //This constructor is used when creating a new generation of snakes.
-  Snake(ArrayList<int[]> _positions, NeuralNetwork _brain) {
+  Snake(ArrayList<int[]> _positions, NeuralNetwork _brain, float _mutationChance) {
     positions = _positions;
     brain = _brain;
+    brain.setActivationFunction(ActivationFunction.TANH);
+    brain.mutate(_mutationChance);
     createFruit();
   }
-  //returns a copy of this snake with the same brain.
+  //returns a copy of this snake with the same brain and points!!
   Snake copySnake() {
     return createNewGenSnake(brain.copy());
   }
@@ -68,6 +78,7 @@ class Snake {
     double distanceToCeiling = positions.get(0)[1]/cellsInHeight; //distance to floor is just 1-this.
     double xDistanceToFruit = fruitPosition[0] - positions.get(0)[0];
     double yDistanceToFruit = fruitPosition[1] - positions.get(0)[1];
+    //TODO: Distance to self!
     double xDir = 0;
     double yDir = 0;
     double snakeLength = positions.size()/(cellsInWidth + cellsInHeight);
@@ -198,6 +209,8 @@ class Snake {
       newPositions.add(positions.get(i));
     }
     positions = newPositions;
+    
+    points += pointsPerTimeStep;
   }
 
   /*
